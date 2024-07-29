@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/smtp"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -35,12 +36,12 @@ func init() {
 
 func sendEmail(message string, toAddress string) (response bool, err error) {
 	fromAddress := os.Getenv("EMAIL")
-	fromEmailPassword := os.Getenv("PASSWORD")
+	fromEmailPassword := os.Getenv("EMAIL_PASSWORD")
 	smtpServer := os.Getenv("SMTP_SERVER")
-	smptPort := os.Getenv("SMTP_PORT")
+	smtpPort := os.Getenv("SMTP_PORT")
 
 	var auth = smtp.PlainAuth("", fromAddress, fromEmailPassword, smtpServer)
-	err = smtp.SendMail(smtpServer+":"+smptPort, auth, fromAddress, []string{toAddress}, []byte(message))
+	err = smtp.SendMail(smtpServer+":"+smtpPort, auth, fromAddress, []string{toAddress}, []byte(message))
 	if err == nil {
 		return true, nil
 	}
@@ -48,10 +49,36 @@ func sendEmail(message string, toAddress string) (response bool, err error) {
 	return false, err
 }
 
+func getKafkaBrokerFromEnv() (string, error) {
+	urlStr := os.Getenv("UPSTASH_KAFKA_REST_URL")
+	if urlStr == "" {
+		return "", fmt.Errorf("UPSTASH_KAFKA_REST_URL is not set")
+	}
+
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Kafka URL: %v", err)
+	}
+
+	hostname := parsedURL.Hostname()
+	port := parsedURL.Port()
+	if port == "" {
+		port = "9092"
+	}
+
+	return fmt.Sprintf("%s:%s", hostname, port), nil
+}
+
 func consume(ctx context.Context) {
 	mechanism, _ := scram.Mechanism(scram.SHA256, os.Getenv("UPSTASH_KAFKA_REST_USERNAME"), os.Getenv("UPSTASH_KAFKA_REST_PASSWORD"))
+
+	broker, err := getKafkaBrokerFromEnv()
+	if err != nil {
+		log.Fatalf("failed to get Kafka broker: %v", err)
+	}
+
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{os.Getenv("UPSTASH_KAFKA_REST_URL")},
+		Brokers: []string{broker}, // Use the extracted broker address
 		Topic:   "new-user",
 		GroupID: "email-new-users",
 		Dialer: &kafka.Dialer{
