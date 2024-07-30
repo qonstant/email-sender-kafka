@@ -1,5 +1,5 @@
 # Use the official Golang image with Alpine Linux as the base image for building
-FROM --platform=linux/arm64 golang:1.22-alpine as builder
+FROM --platform=linux/amd64 golang:1.22-alpine as builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev
@@ -20,7 +20,7 @@ COPY . .
 RUN ls -l /build
 
 # Build the Go app with CGO enabled and musl tag
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags musl -o email-service .
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags musl -o email-service .
 
 # Create a new stage for the final application image based on Alpine Linux
 FROM alpine:3.18
