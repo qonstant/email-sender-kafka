@@ -1,21 +1,16 @@
 package main
 
 import (
-	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/smtp"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/joho/godotenv"
-	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
 type User struct {
@@ -40,83 +35,66 @@ func sendEmail(message string, toAddress string) (response bool, err error) {
 	smtpServer := os.Getenv("SMTP_SERVER")
 	smtpPort := os.Getenv("SMTP_PORT")
 
-	var auth = smtp.PlainAuth("", fromAddress, fromEmailPassword, smtpServer)
+	auth := smtp.PlainAuth("", fromAddress, fromEmailPassword, smtpServer)
 	err = smtp.SendMail(smtpServer+":"+smtpPort, auth, fromAddress, []string{toAddress}, []byte(message))
-	if err == nil {
-		return true, nil
+	if err != nil {
+		log.Printf("SMTP error: %v", err)
+		return false, err
 	}
 
-	return false, err
+	return true, nil
 }
 
-func getKafkaBrokerFromEnv() (string, error) {
-	urlStr := os.Getenv("UPSTASH_KAFKA_REST_URL")
-	if urlStr == "" {
-		return "", fmt.Errorf("UPSTASH_KAFKA_REST_URL is not set")
-	}
-
-	parsedURL, err := url.Parse(urlStr)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse Kafka URL: %v", err)
-	}
-
-	hostname := parsedURL.Hostname()
-	port := parsedURL.Port()
-	if port == "" {
-		port = "9092"
-	}
-
-	return fmt.Sprintf("%s:%s", hostname, port), nil
-}
-
-func consume(ctx context.Context) {
-	mechanism, _ := scram.Mechanism(scram.SHA256, os.Getenv("UPSTASH_KAFKA_REST_USERNAME"), os.Getenv("UPSTASH_KAFKA_REST_PASSWORD"))
-
-	broker, err := getKafkaBrokerFromEnv()
-	if err != nil {
-		log.Fatalf("failed to get Kafka broker: %v", err)
-	}
-
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{broker}, // Use the extracted broker address
-		Topic:   "new-user",
-		GroupID: "email-new-users",
-		Dialer: &kafka.Dialer{
-			SASLMechanism: mechanism,
-			TLS:           &tls.Config{},
-		},
+func Consumer(topic string, groupId string) {
+	c, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers": os.Getenv("UPSTASH_KAFKA_REST_URL"),
+		"sasl.mechanism":    "SCRAM-SHA-256",
+		"security.protocol": "SASL_SSL",
+		"sasl.username":     os.Getenv("UPSTASH_KAFKA_REST_USERNAME"),
+		"sasl.password":     os.Getenv("UPSTASH_KAFKA_REST_PASSWORD"),
+		"group.id":          groupId,
+		"auto.offset.reset": "earliest",
 	})
+	if err != nil {
+		log.Fatalf("Failed to create consumer: %v", err)
+	}
 
-	defer r.Close()
+	err = c.Subscribe(topic, nil)
+	if err != nil {
+		log.Fatalf("Failed to subscribe to topic: %v", err)
+	}
 
 	for {
-		msg, err := r.ReadMessage(ctx)
-		if err != nil {
-			log.Printf("could not read message: %v", err)
-			continue
-		}
-		userData := msg.Value
-
-		var user User
-
-		err = json.Unmarshal(userData, &user)
-		if err != nil {
-			log.Printf("could not parse user data: %v", err)
+		ev := c.Poll(100)
+		if ev == nil {
 			continue
 		}
 
-		subject := "Subject: Account created!\n\n"
-		body := fmt.Sprintf("Dear %s,\nYour account is now active and your ID is %s and your role is %s. Congrats!", user.FullName, strconv.Itoa(int(user.ID)), user.Role)
-		message := strings.Join([]string{subject, body}, " ")
+		switch e := ev.(type) {
+		case *kafka.Message:
+			var user User
+			err := json.Unmarshal(e.Value, &user)
+			if err != nil {
+				log.Printf("Failed to deserialize message: %v", err)
+				continue
+			}
 
-		_, err = sendEmail(message, user.Email)
-		if err != nil {
-			log.Printf("failed to send email: %v", err)
+			subject := "Subject: Account created!\n\n"
+			body := fmt.Sprintf("Dear %s,\nYour account is now active and your ID is %d and your role is %s. Congrats!", user.FullName, user.ID, user.Role)
+			message := strings.Join([]string{subject, body}, " ")
+
+			_, err = sendEmail(message, user.Email)
+			if err != nil {
+				log.Printf("Failed to send email: %v", err)
+			} else {
+				fmt.Printf("Received message key %s value %+v and sent email successfully\n", string(e.Key), user)
+			}
 		}
 	}
 }
 
 func main() {
-	ctx := context.Background()
-	consume(ctx)
+	topic := "new-user"
+	groupId := "email-new-users"
+	Consumer(topic, groupId)
 }
