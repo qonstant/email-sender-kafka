@@ -11,8 +11,6 @@ services:
       - UPSTASH_KAFKA_REST_URL=your-kafka-url
       - UPSTASH_KAFKA_REST_USERNAME=your-kafka-username
       - UPSTASH_KAFKA_REST_PASSWORD=your-kafka-password
-    depends_on:
-      - kafka
     networks:
       - app-network
 

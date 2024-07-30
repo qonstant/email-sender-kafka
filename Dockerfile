@@ -1,26 +1,29 @@
-# Use the official Golang image as the base image for building the application
-FROM golang:1.22 as builder
+# Use the official Golang image with Alpine Linux as the base image for building
+FROM --platform=linux/arm64 golang:1.22-alpine as builder
 
-# Set the working directory inside the container
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
+
+# Set the working directory inside the builder container
 WORKDIR /build
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
-# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+# Download all dependencies
 RUN go mod download
 
 # Copy the source code into the builder container
 COPY . .
 
-# Build the Go app
-RUN go build -o email-service .
+# Print contents of /build directory for debugging
+RUN ls -l /build
 
-# Create a new stage for the final application image (based on Alpine Linux)
+# Build the Go app with CGO enabled and musl tag
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags musl -o email-service .
+
+# Create a new stage for the final application image based on Alpine Linux
 FROM alpine:3.18
-
-# Install necessary packages
-RUN apk add --no-cache libmagic ca-certificates
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -28,11 +31,11 @@ WORKDIR /app
 # Copy the built executable from the builder stage
 COPY --from=builder /build/email-service ./email-service
 
-# Copy environment file
-COPY .env .env
+# Copy environment configuration file
+COPY --from=builder /build/.env ./.env
 
-# Expose port if necessary (if your app listens on a specific port, otherwise you can remove this line)
+# Expose port if necessary (remove if not needed)
 EXPOSE 8080
 
-# Command to run your application
+# Command to run the application
 CMD ["./email-service"]
