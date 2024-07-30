@@ -29,6 +29,4 @@ WORKDIR /app
 COPY --from=builder /app/build/app /app/app
 COPY --from=builder /app/.env /app/.env
 
-EXPOSE 8080
-
 ENTRYPOINT ["/app/app"]
