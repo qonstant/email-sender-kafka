@@ -32,7 +32,8 @@ WORKDIR /app
 COPY --from=builder /build/email-service ./email-service
 
 # Copy environment configuration file
-COPY --from=builder /build/.env ./.env
+# Ensure the .env file is in the /build directory if you need it
+COPY --from=builder /build/.env ./
 
 # Expose port if necessary (remove if not needed)
 EXPOSE 8080
