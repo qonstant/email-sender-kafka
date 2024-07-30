@@ -1,5 +1,5 @@
 # Use the official Golang image with Alpine Linux as the base image for building
-FROM --platform=linux/arm64 golang:1.22-alpine as builder
+FROM golang:1.22-alpine as builder
 
 # Install build dependencies
 RUN apk add --no-cache gcc musl-dev
@@ -19,8 +19,8 @@ COPY . .
 # Print contents of /build directory for debugging
 RUN ls -l /build
 
-# Build the Go app with CGO enabled and musl tag
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags musl -o email-service .
+# Build the Go app with CGO enabled and musl tag for the correct architecture
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -tags musl -o email-service .
 
 # Create a new stage for the final application image based on Alpine Linux
 FROM alpine:3.18
@@ -32,7 +32,6 @@ WORKDIR /app
 COPY --from=builder /build/email-service ./email-service
 
 # Copy environment configuration file
-# Ensure the .env file is in the /build directory if you need it
 COPY --from=builder /build/.env ./
 
 # Expose port if necessary (remove if not needed)
