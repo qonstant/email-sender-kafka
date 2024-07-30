@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/smtp"
 	"os"
 	"strings"
@@ -93,8 +94,26 @@ func Consumer(topic string, groupId string) {
 	}
 }
 
+func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Works fine"))
+}
+
 func main() {
 	topic := "new-user"
 	groupId := "email-new-users"
-	Consumer(topic, groupId)
+
+	// Start Kafka consumer in a goroutine
+	go Consumer(topic, groupId)
+
+	// Set up HTTP server for health check
+	http.HandleFunc("/health", healthCheckHandler)
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "8080" // default port if not specified
+	}
+	log.Printf("Starting HTTP server on port %s", httpPort)
+	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
+		log.Fatalf("Could not start server: %v", err)
+	}
 }
