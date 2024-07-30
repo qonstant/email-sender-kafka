@@ -11,4 +11,5 @@ RUN go build -tags musl -ldflags '-extldflags "-static"' -o /build/main
 FROM scratch
 WORKDIR /app
 COPY --from=builder /build/main .
+COPY .env .env
 ENTRYPOINT ["/app/main"]
