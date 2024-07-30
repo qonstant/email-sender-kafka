@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  email-service:
+    build: .
+    environment:
+      - EMAIL=your-email@example.com
+      - EMAIL_PASSWORD=your-email-password
+      - SMTP_SERVER=smtp.example.com
+      - SMTP_PORT=587
+      - UPSTASH_KAFKA_REST_URL=your-kafka-url
+      - UPSTASH_KAFKA_REST_USERNAME=your-kafka-username
+      - UPSTASH_KAFKA_REST_PASSWORD=your-kafka-password
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
