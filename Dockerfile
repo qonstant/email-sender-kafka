@@ -23,7 +23,11 @@ RUN go build -tags musl --ldflags '-linkmode external -extldflags "-static"' -o 
 
 FROM gcr.io/distroless/static-debian12 as runner
 
-COPY --from=builder /app/build/app /app/
+WORKDIR /app
+
+# Copy the built application and .env file
+COPY --from=builder /app/build/app /app/app
+COPY --from=builder /app/.env /app/.env
 
 EXPOSE 8080
 
