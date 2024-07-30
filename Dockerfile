@@ -1,17 +1,29 @@
-# Use the official Golang image with Alpine Linux as the base image for building
-FROM golang:1.22-alpine as builder
-
-RUN apk add --no-progress --no-cache gcc musl-dev
-WORKDIR /build
-COPY . .
-RUN go mod download
-
-RUN go build -tags musl -ldflags '-extldflags "-static"' -o /build/main
-
-# Use a minimal base image but install necessary packages
-FROM alpine:latest
-RUN apk add --no-cache ca-certificates
+FROM golang:1.21-alpine as builder
 
 WORKDIR /app
-COPY --from=builder /build/main .
-ENTRYPOINT ["/app/main"]
+
+# Packages
+RUN apk update && apk --no-cache add build-base librdkafka-dev pkgconf musl-dev
+
+# Go modules
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+
+COPY . .
+
+# Environment
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOARCH=amd64
+
+# Build
+RUN go build -tags musl --ldflags '-linkmode external -extldflags "-static"' -o ./build/...
+
+FROM gcr.io/distroless/static-debian12 as runner
+
+COPY --from=builder ["/app/build/", "/"]
+
+EXPOSE 8080
+
+ENTRYPOINT [...]
