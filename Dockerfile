@@ -8,8 +8,10 @@ RUN go mod download
 
 RUN go build -tags musl -ldflags '-extldflags "-static"' -o /build/main
 
-FROM scratch
+# Use a minimal base image but install necessary packages
+FROM alpine:latest
+RUN apk add --no-cache ca-certificates
+
 WORKDIR /app
 COPY --from=builder /build/main .
-COPY .env .env
 ENTRYPOINT ["/app/main"]
