@@ -3,6 +3,7 @@ up:
 
 down:
 	docker compose down
+	docker rmi email-sender-kafka-email-service
 
 restart: down up
 

@@ -73,6 +73,11 @@ func Consumer(topic string, groupId string) {
 
 		switch e := ev.(type) {
 		case *kafka.Message:
+			// Skip the first 7 bytes
+			if len(e.Value) > 7 {
+				e.Value = e.Value[7:]
+			}
+
 			var user User
 			err := json.Unmarshal(e.Value, &user)
 			if err != nil {
@@ -94,6 +99,7 @@ func Consumer(topic string, groupId string) {
 	}
 }
 
+
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Works fine"))
@@ -101,7 +107,7 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	topic := "new-user"
-	groupId := "email-new-users"
+	groupId := "email-new"
 
 	// Start Kafka consumer in a goroutine
 	go Consumer(topic, groupId)
@@ -110,7 +116,7 @@ func main() {
 	http.HandleFunc("/health", healthCheckHandler)
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {
-		httpPort = "8080" // default port if not specified
+		httpPort = "8081" // default port if not specified
 	}
 	log.Printf("Starting HTTP server on port %s", httpPort)
 	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
